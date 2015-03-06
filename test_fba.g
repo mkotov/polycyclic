@@ -1,33 +1,44 @@
-# Returns the length of w. The length is defined as the sum of the absolute values of the exponents of the generators.
-get_word_length := function(w)
-    return Sum(Exponents(w), x -> AbsInt(x));
-end;
+Read("fba.g");
 
-
-# Returns the length of set. The length of a set is defined as the sum of the length of the elements.
-get_set_length := function(set) 
-    return Sum(set, w -> get_word_length(w));
-end;
-
-
-# Implementation of length-based attack for AAG.
-length_based_attack := function(as, bs, conjugated_bs)
-    local s, a, best, conjugated_best, epsilon, t;
-    s := Set([[get_set_length(conjugated_bs), conjugated_bs, One(conjugated_bs[1])]]);
-    while Length(s) > 0 do
-        best := Remove(s, 1);
-        for epsilon in [-1, 1] do
-            for a in as do
-                t := List(best[2], x -> x ^ (a ^ epsilon));
-                conjugated_best := [get_set_length(t), t, best[3] * a ^ epsilon];
-                if conjugated_best[2] = bs then
-                    return conjugated_best[3]^-1;
-                fi;
-                if best[1] - conjugated_best[1] > 0 then
-                    AddSet(s, conjugated_best);
-                fi;
-            od;
-        od;
+# Test suite
+test_field_based_attack := function(f, public_set_size, private_key_size, test_num)   
+    local alice_public_set, bob_public_set, alice_private_key, conjugated_bob_public_set, 
+            G, start_time, end_time, i, found_alice_private_key, total_time;
+    start_time := Runtime();
+    for i in [1..test_num] do
+        G := generate_O_by_U_by_f_with_extra_info(f); 
+        alice_public_set := List([1..public_set_size], i -> Random(G.presentation));
+        bob_public_set := List([1..public_set_size], i -> Random(G.presentation));
+        alice_private_key := Product(List([1..private_key_size], i -> Random(alice_public_set) ^ Random([-1, 1])));
+        conjugated_bob_public_set := List(bob_public_set, x -> x ^ alice_private_key);
+        found_alice_private_key := field_based_attack(G, bob_public_set, conjugated_bob_public_set);
+        if alice_private_key <> found_alice_private_key then
+            Print("The keys are different!\n");
+        fi;
     od;
-    return fail;
+    end_time := Runtime();
+    total_time := end_time - start_time;
+    Print(Degree(f), " ", HirschLength(G.presentation), " ", Float(total_time / test_num), " ", f, "\n");
 end;
+
+
+x := Indeterminate(Rationals);
+ps := [
+    x^2 - x - 1,
+    x^5 - x^3- 1,
+    x^7 - x^3 - 1,
+    x^9 - 7*x^3 - 1,
+    x^11 - x^3 - 1,
+    x^15 - x - 2,
+    x^20 - x - 1
+];
+
+
+for p in ps do
+    test_field_based_attack(p, 20, 5, 100);
+od;
+
+for p in ps do
+    test_field_based_attack(p, 20, 100, 100);
+od;
+
